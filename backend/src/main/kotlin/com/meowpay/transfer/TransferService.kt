@@ -33,6 +33,18 @@ data class TransferView(
     val createdAt: Instant,
 )
 
+/** One line of a cat's statement. `counterparty` is the other cat for transfers, null for top-ups. */
+data class LedgerLine(
+    val id: Long,
+    val kind: LedgerKind,
+    val amount: Long,
+    val balanceAfter: Long,
+    val counterparty: CatRef?,
+    val note: String?,
+    val transferId: UUID?,
+    val createdAt: Instant,
+)
+
 /** `replayed` is true when the Idempotency-Key matched an earlier transfer and nothing new happened. */
 data class TransferResult(val transfer: TransferView, val replayed: Boolean)
 
@@ -111,6 +123,18 @@ class TransferService(
     @Transactional(readOnly = true)
     fun history(catId: Long, limit: Int = 50): List<TransferView> =
         transfers.history(catId, PageRequest.of(0, limit)).map { it.toView() }
+
+    @Transactional(readOnly = true)
+    fun statement(catId: Long, limit: Int = 50): List<LedgerLine> =
+        ledger.statement(catId, PageRequest.of(0, limit)).map { e ->
+            val t = e.transfer
+            val counterparty = when (e.kind) {
+                LedgerKind.TRANSFER_OUT -> t?.toAccount?.cat?.toRef()
+                LedgerKind.TRANSFER_IN -> t?.fromAccount?.cat?.toRef()
+                LedgerKind.TOPUP -> null
+            }
+            LedgerLine(e.id!!, e.kind, e.amount, e.balanceAfter, counterparty, t?.note, t?.id, e.createdAt)
+        }
 
     private fun Transfer.toView() =
         TransferView(id!!, fromAccount.cat.toRef(), toAccount.cat.toRef(), amount, note, createdAt)

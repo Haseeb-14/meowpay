@@ -9,6 +9,7 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.transaction.support.TransactionTemplate
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -19,6 +20,7 @@ import kotlin.test.assertTrue
 
 @SpringBootTest
 @Import(TestcontainersConfiguration::class)
+@ActiveProfiles("test")
 class TransferServiceTest @Autowired constructor(
     private val service: TransferService,
     private val ledger: LedgerEntryRepository,

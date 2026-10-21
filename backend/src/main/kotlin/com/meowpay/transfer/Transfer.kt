@@ -37,6 +37,10 @@ class Transfer(
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),
 
+    /** Assigned by the database; the stable ordering key for history. */
+    @Column(insertable = false, updatable = false)
+    val seq: Long? = null,
+
     @Id
     @GeneratedValue
     @UuidGenerator

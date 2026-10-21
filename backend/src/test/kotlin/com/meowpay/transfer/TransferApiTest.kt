@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
@@ -16,6 +17,7 @@ import java.util.UUID
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration::class)
+@ActiveProfiles("test")
 class TransferApiTest @Autowired constructor(
     private val mvc: MockMvc,
     private val cats: TestCats,
@@ -85,6 +87,16 @@ class TransferApiTest @Autowired constructor(
             status { isOk() }
             jsonPath("$.length()") { value(1) }
             jsonPath("$[0].from.name") { value(a.name) }
+        }
+        mvc.get("/api/ledger") { header("X-Cat-Id", a.id!!) }.andExpect {
+            status { isOk() }
+            jsonPath("$.length()") { value(2) }
+            jsonPath("$[0].kind") { value("TRANSFER_OUT") }
+            jsonPath("$[0].amount") { value(-20) }
+            jsonPath("$[0].balanceAfter") { value(30) }
+            jsonPath("$[0].counterparty.name") { value(b.name) }
+            jsonPath("$[1].kind") { value("TOPUP") }
+            jsonPath("$[1].balanceAfter") { value(50) }
         }
     }
 

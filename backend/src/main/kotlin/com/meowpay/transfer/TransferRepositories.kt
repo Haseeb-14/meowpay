@@ -18,7 +18,7 @@ interface TransferRepository : JpaRepository<Transfer, UUID> {
           join fetch t.fromAccount fa join fetch fa.cat
           join fetch t.toAccount ta join fetch ta.cat
         where fa.cat.id = :catId or ta.cat.id = :catId
-        order by t.createdAt desc, t.id desc
+        order by t.seq desc
         """,
     )
     fun history(@Param("catId") catId: Long, pageable: Pageable): List<Transfer>
@@ -31,4 +31,17 @@ interface LedgerEntryRepository : JpaRepository<LedgerEntry, Long> {
 
     @Query("select e from LedgerEntry e where e.transfer.id = :transferId order by e.id")
     fun findByTransferId(@Param("transferId") transferId: UUID): List<LedgerEntry>
+
+    /** The cat's statement, newest first, with the counterparty cats loaded in one query. */
+    @Query(
+        """
+        select e from LedgerEntry e
+          left join fetch e.transfer t
+          left join fetch t.fromAccount fa left join fetch fa.cat
+          left join fetch t.toAccount ta left join fetch ta.cat
+        where e.account.cat.id = :catId
+        order by e.id desc
+        """,
+    )
+    fun statement(@Param("catId") catId: Long, pageable: Pageable): List<LedgerEntry>
 }

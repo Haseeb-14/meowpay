@@ -61,4 +61,8 @@ class TransferController(private val service: TransferService) {
     /** The acting cat's sent and received transfers, newest first. */
     @GetMapping("/transfers")
     fun list(@CurrentCat cat: Cat): List<TransferView> = service.history(cat.id!!)
+
+    /** The acting cat's ledger: every movement with the balance after it, newest first. */
+    @GetMapping("/ledger")
+    fun ledger(@CurrentCat cat: Cat): List<LedgerLine> = service.statement(cat.id!!)
 }
