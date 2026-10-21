@@ -5,6 +5,9 @@ A digital wallet for cats. Humans top it up; cats send each other **treats**.
 This repo is one thin vertical slice of the **transfer** flow: a cat picks another cat,
 types an amount, hits Send, and the treats move. Real backend, real Postgres, real UI.
 
+**Time spent:** about 4 hours, including scoping, the build, a review-and-fix pass, and
+this write-up.
+
 ## What's in the slice
 
 - `POST /api/transfers` moves treats atomically, with row locks, an idempotency key and a
