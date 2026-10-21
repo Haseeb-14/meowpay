@@ -2,51 +2,18 @@ package com.meowpay.transfer
 
 import com.meowpay.account.AccountRepository
 import com.meowpay.api.ApiException
-import com.meowpay.cat.Cat
+import com.meowpay.cat.toRef
+import com.meowpay.config.MeowPayProperties
+import com.meowpay.ledger.LedgerEntry
+import com.meowpay.ledger.LedgerEntryRepository
+import com.meowpay.ledger.LedgerKind
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockTimeoutException
 import jakarta.persistence.PessimisticLockException
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.dao.PessimisticLockingFailureException
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.Instant
-import java.util.UUID
-
-data class TransferCommand(
-    val fromCatId: Long,
-    val toCatId: Long,
-    val amount: Long,
-    val note: String?,
-    val idempotencyKey: String,
-)
-
-data class CatRef(val id: Long, val name: String)
-
-data class TransferView(
-    val id: UUID,
-    val from: CatRef,
-    val to: CatRef,
-    val amount: Long,
-    val note: String?,
-    val createdAt: Instant,
-)
-
-/** One line of a cat's statement. `counterparty` is the other cat for transfers, null for top-ups. */
-data class LedgerLine(
-    val id: Long,
-    val kind: LedgerKind,
-    val amount: Long,
-    val balanceAfter: Long,
-    val counterparty: CatRef?,
-    val note: String?,
-    val transferId: UUID?,
-    val createdAt: Instant,
-)
-
-/** `replayed` is true when the Idempotency-Key matched an earlier transfer and nothing new happened. */
-data class TransferResult(val transfer: TransferView, val replayed: Boolean)
 
 @Service
 class TransferService(
@@ -54,7 +21,7 @@ class TransferService(
     private val transfers: TransferRepository,
     private val ledger: LedgerEntryRepository,
     private val entityManager: EntityManager,
-    @Value("\${meowpay.lock-timeout-ms:3000}") private val lockTimeoutMs: Long,
+    private val props: MeowPayProperties,
 ) {
 
     /**
@@ -74,7 +41,7 @@ class TransferService(
         require(cmd.amount > 0) { "amount must be positive" }
         if (cmd.fromCatId == cmd.toCatId) throw ApiException.selfTransfer()
 
-        entityManager.createNativeQuery("set local lock_timeout = $lockTimeoutMs").executeUpdate()
+        entityManager.createNativeQuery("set local lock_timeout = ${props.lockTimeoutMs}").executeUpdate()
         val locked = try {
             listOf(cmd.fromCatId, cmd.toCatId).sorted().associateWith { catId ->
                 accounts.lockByCatId(catId) ?: throw ApiException.catNotFound(catId)
@@ -124,20 +91,6 @@ class TransferService(
     fun history(catId: Long, limit: Int = 50): List<TransferView> =
         transfers.history(catId, PageRequest.of(0, limit)).map { it.toView() }
 
-    @Transactional(readOnly = true)
-    fun statement(catId: Long, limit: Int = 50): List<LedgerLine> =
-        ledger.statement(catId, PageRequest.of(0, limit)).map { e ->
-            val t = e.transfer
-            val counterparty = when (e.kind) {
-                LedgerKind.TRANSFER_OUT -> t?.toAccount?.cat?.toRef()
-                LedgerKind.TRANSFER_IN -> t?.fromAccount?.cat?.toRef()
-                LedgerKind.TOPUP -> null
-            }
-            LedgerLine(e.id!!, e.kind, e.amount, e.balanceAfter, counterparty, t?.note, t?.id, e.createdAt)
-        }
-
     private fun Transfer.toView() =
         TransferView(id!!, fromAccount.cat.toRef(), toAccount.cat.toRef(), amount, note, createdAt)
-
-    private fun Cat.toRef() = CatRef(id!!, name)
 }

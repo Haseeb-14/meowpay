@@ -4,10 +4,6 @@ import com.meowpay.api.ApiException
 import com.meowpay.api.CurrentCat
 import com.meowpay.cat.Cat
 import jakarta.validation.Valid
-import jakarta.validation.constraints.Max
-import jakarta.validation.constraints.Min
-import jakarta.validation.constraints.NotNull
-import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,12 +16,6 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api")
 class TransferController(private val service: TransferService) {
-
-    data class CreateTransferRequest(
-        @field:NotNull val toCatId: Long?,
-        @field:NotNull @field:Min(1) @field:Max(1_000_000_000) val amount: Long?,
-        @field:Size(max = 140) val note: String?,
-    )
 
     /**
      * Send treats. `Idempotency-Key` is required: retrying with the same key returns the
@@ -61,8 +51,4 @@ class TransferController(private val service: TransferService) {
     /** The acting cat's sent and received transfers, newest first. */
     @GetMapping("/transfers")
     fun list(@CurrentCat cat: Cat): List<TransferView> = service.history(cat.id!!)
-
-    /** The acting cat's ledger: every movement with the balance after it, newest first. */
-    @GetMapping("/ledger")
-    fun ledger(@CurrentCat cat: Cat): List<LedgerLine> = service.statement(cat.id!!)
 }

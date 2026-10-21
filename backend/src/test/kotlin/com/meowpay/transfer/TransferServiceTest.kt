@@ -4,6 +4,7 @@ import com.meowpay.TestCats
 import com.meowpay.TestcontainersConfiguration
 import com.meowpay.account.AccountRepository
 import com.meowpay.api.ApiException
+import com.meowpay.ledger.LedgerEntryRepository
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired

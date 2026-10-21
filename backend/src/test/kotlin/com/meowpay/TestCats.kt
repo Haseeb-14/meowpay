@@ -4,9 +4,9 @@ import com.meowpay.account.Account
 import com.meowpay.account.AccountRepository
 import com.meowpay.cat.Cat
 import com.meowpay.cat.CatRepository
-import com.meowpay.transfer.LedgerEntry
-import com.meowpay.transfer.LedgerEntryRepository
-import com.meowpay.transfer.LedgerKind
+import com.meowpay.ledger.LedgerEntry
+import com.meowpay.ledger.LedgerEntryRepository
+import com.meowpay.ledger.LedgerKind
 import org.springframework.stereotype.Component
 import java.util.UUID
 

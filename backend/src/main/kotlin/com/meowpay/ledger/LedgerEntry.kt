@@ -1,6 +1,7 @@
-package com.meowpay.transfer
+package com.meowpay.ledger
 
 import com.meowpay.account.Account
+import com.meowpay.transfer.Transfer
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
