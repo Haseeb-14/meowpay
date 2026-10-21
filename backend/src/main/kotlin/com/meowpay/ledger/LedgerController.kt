@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api")
 class LedgerController(private val service: LedgerService) {
-
-    /** The acting cat's ledger: every movement with the balance after it, newest first. */
     @GetMapping("/ledger")
     fun ledger(@CurrentCat cat: Cat): List<LedgerLine> = service.statement(cat.id!!)
 }

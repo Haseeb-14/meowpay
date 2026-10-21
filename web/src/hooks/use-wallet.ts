@@ -12,16 +12,6 @@ export type Status =
 
 export type SendFields = { toCatId: string; amount: string; note: string };
 
-/**
- * All wallet state: who you are, your balance and ledger, the send form, and the
- * idempotency key for the send in flight.
- *
- * One Idempotency-Key per *intent*. It is created on submit, reused if the request
- * fails in a way where the server may still have acted (network, 5xx, 503 try_again),
- * and discarded as soon as the user edits the form or the transfer succeeds. While
- * unresolved it is also kept in sessionStorage so a reload cannot turn a retry into
- * a second transfer.
- */
 export function useWallet() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [meId, setMeId] = useState<number | null>(null);
@@ -42,7 +32,6 @@ export function useWallet() {
     writePending(null);
   };
 
-  // Load the directory once; restore who we were, and any send still in flight.
   useEffect(() => {
     api
       .cats()
@@ -70,7 +59,6 @@ export function useWallet() {
       .catch((e: ApiError) => setLoadError(e.message));
   }, []);
 
-  // Whenever the acting cat changes, remember it and load its balance and ledger.
   useEffect(() => {
     if (meId == null) return;
     saveCat(meId);
@@ -91,7 +79,7 @@ export function useWallet() {
 
   const refresh = useCallback(async (catId: number) => {
     const [meData, lines] = await Promise.all([api.me(catId), api.ledger(catId)]);
-    // Ignore a response for a cat we have since switched away from.
+
     if (meIdRef.current !== catId) return;
     setMe(meData);
     setLedger(lines);
@@ -108,7 +96,7 @@ export function useWallet() {
 
   function updateField<K extends keyof SendFields>(key: K, value: SendFields[K]) {
     setFields((f) => ({ ...f, [key]: value }));
-    resetKey(); // an edited form is a new intent
+    resetKey();
   }
 
   const amountNumber = Number(fields.amount);
@@ -140,7 +128,6 @@ export function useWallet() {
       if (!apiErr.isRetryable) resetKey();
       setStatus({ kind: "error", message: apiErr.message, retryable: apiErr.isRetryable });
     } finally {
-      // Refresh either way: on a loss or a timeout the balance may have changed under us.
       refresh(meId).catch(() => {});
     }
   }

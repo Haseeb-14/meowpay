@@ -23,19 +23,6 @@ class TransferService(
     private val entityManager: EntityManager,
     private val props: MeowPayProperties,
 ) {
-
-    /**
-     * Move treats between two cats, atomically.
-     *
-     * Both account rows are locked with SELECT ... FOR UPDATE in ascending cat-id order:
-     *  - the fixed order means A->B and B->A can never deadlock each other;
-     *  - the sender's lock serialises every transfer from that cat, so the
-     *    idempotency lookup below cannot race with itself and the balance check
-     *    always sees the latest committed value.
-     * Lock waits are bounded by `meowpay.lock-timeout-ms`; a request that cannot get
-     * its rows in time fails with 503 `try_again` instead of holding a connection.
-     * Any exception rolls the whole thing back; nothing is ever half-applied.
-     */
     @Transactional
     fun transfer(cmd: TransferCommand): TransferResult {
         require(cmd.amount > 0) { "amount must be positive" }

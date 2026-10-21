@@ -1,7 +1,3 @@
--- Demo data for local development and tests. Repeatable and idempotent: safe to
--- re-run, never duplicates. Excluded under the `prod` profile (see application-prod.yml).
--- Humans topping up wallets is outside this slice, so opening balances are seeded
--- as TOPUP ledger entries. Tofu starts at zero so insufficient funds is one click away.
 insert into cats (name) values ('Mochi'), ('Luna'), ('Tofu'), ('Biscuit')
 on conflict (name) do nothing;
 

@@ -7,14 +7,12 @@ import org.springframework.data.repository.query.Param
 import java.util.UUID
 
 interface LedgerEntryRepository : JpaRepository<LedgerEntry, Long> {
-
     @Query("select coalesce(sum(e.amount), 0) from LedgerEntry e where e.account.id = :accountId")
     fun sumByAccountId(@Param("accountId") accountId: Long): Long
 
     @Query("select e from LedgerEntry e where e.transfer.id = :transferId order by e.id")
     fun findByTransferId(@Param("transferId") transferId: UUID): List<LedgerEntry>
 
-    /** The cat's statement, newest first, with the counterparty cats loaded in one query. */
     @Query(
         """
         select e from LedgerEntry e

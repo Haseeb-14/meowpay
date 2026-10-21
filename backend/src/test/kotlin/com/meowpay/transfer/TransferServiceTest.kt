@@ -29,7 +29,6 @@ class TransferServiceTest @Autowired constructor(
     private val tx: TransactionTemplate,
     private val cats: TestCats,
 ) {
-
     private fun send(from: Long, to: Long, amount: Long, key: String = UUID.randomUUID().toString(), note: String? = null) =
         service.transfer(TransferCommand(from, to, amount, note, key))
 
@@ -115,7 +114,7 @@ class TransferServiceTest @Autowired constructor(
     fun `concurrent sends never overdraw the account`() {
         val a = cats.newCat(100)
         val b = cats.newCat(0)
-        val attempts = 20 // 20 x 10 treats against a balance of 100: exactly 10 can win
+        val attempts = 20
 
         val codes = runConcurrently(attempts) { send(a.id!!, b.id!!, 10) }
 
@@ -169,7 +168,6 @@ class TransferServiceTest @Autowired constructor(
         assertTrue(service.history(a.id!!).isEmpty())
     }
 
-    /** Runs [block] on [n] threads released at the same instant; returns "ok" or the ApiException code per thread. */
     private fun runConcurrently(n: Int, block: (Int) -> Unit): List<String> {
         val pool = Executors.newFixedThreadPool(n)
         val start = CountDownLatch(1)

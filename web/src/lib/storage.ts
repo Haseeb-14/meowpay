@@ -1,9 +1,6 @@
-/** Per-browser conveniences. Every read and write is guarded: storage may be absent or blocked. */
-
 const CAT_KEY = "meowpay.catId";
 const PENDING_KEY = "meowpay.pendingSend";
 
-/** A send whose outcome we do not know yet. Survives a reload so Retry reuses the same key. */
 export type PendingSend = {
   idempotencyKey: string;
   meId: number;
@@ -24,9 +21,7 @@ export function readSavedCat(): number | null {
 export function saveCat(id: number) {
   try {
     localStorage.setItem(CAT_KEY, String(id));
-  } catch {
-    /* storage unavailable */
-  }
+  } catch {}
 }
 
 export function readPending(): PendingSend | null {
@@ -42,7 +37,5 @@ export function writePending(p: PendingSend | null) {
   try {
     if (p) sessionStorage.setItem(PENDING_KEY, JSON.stringify(p));
     else sessionStorage.removeItem(PENDING_KEY);
-  } catch {
-    /* storage unavailable */
-  }
+  } catch {}
 }

@@ -13,16 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
-/**
- * Every error leaves the API in the same shape:
- * `{ "status": 422, "title": "insufficient_funds", "detail": "...", "code": "insufficient_funds", "instance": "/api/transfers" }`
- *
- * Specific handlers first; [fallback] catches everything else so no exception can
- * escape with a different body, and nothing internal leaks into a 500.
- */
 @RestControllerAdvice
 class ApiExceptionHandler {
-
     private val log = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(ApiException::class)
@@ -49,8 +41,6 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(Exception::class)
     fun fallback(e: Exception): ResponseEntity<ProblemDetail> {
-        // Spring's own 404/405/415/406 exceptions carry a ProblemDetail already; keep their
-        // status and add our code so clients never see a second error shape.
         if (e is ErrorResponse) {
             val status = e.statusCode
             val body = e.body.apply {

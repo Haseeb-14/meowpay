@@ -17,10 +17,6 @@ import java.time.Instant
 
 enum class LedgerKind { TOPUP, TRANSFER_OUT, TRANSFER_IN }
 
-/**
- * One line of the double-entry ledger. A transfer writes two rows that sum to zero;
- * a top-up writes one. `balanceAfter` is the account balance once this line applied.
- */
 @Entity
 @Table(name = "ledger_entries")
 class LedgerEntry(
@@ -36,7 +32,6 @@ class LedgerEntry(
     @Column(nullable = false, columnDefinition = "text")
     val kind: LedgerKind,
 
-    /** Signed: negative leaves the account, positive enters it. */
     @Column(nullable = false)
     val amount: Long,
 

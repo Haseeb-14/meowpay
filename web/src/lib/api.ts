@@ -21,7 +21,6 @@ export type LedgerLine = {
   createdAt: string;
 };
 
-/** Mirrors the backend's problem+json: a stable `code` plus a human `message`. */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -30,7 +29,7 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
-  /** True when we cannot know whether the server acted: safe to retry with the same key. */
+
   get isRetryable() {
     return this.status === 0 || this.status >= 500;
   }
@@ -57,9 +56,7 @@ async function request<T>(path: string, init: RequestInit = {}, catId?: number):
       const problem = await res.json();
       if (typeof problem?.code === "string") code = problem.code;
       if (typeof problem?.detail === "string") message = problem.detail;
-    } catch {
-      /* non-JSON error body, keep the defaults */
-    }
+    } catch {}
     throw new ApiError(res.status, code, message);
   }
   return res.json() as Promise<T>;

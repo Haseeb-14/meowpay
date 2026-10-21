@@ -2,7 +2,6 @@ package com.meowpay.api
 
 import org.springframework.http.HttpStatus
 
-/** An error the client can act on. Rendered as RFC 9457 problem+json with a stable `code`. */
 class ApiException(val status: HttpStatus, val code: String, override val message: String) : RuntimeException(message) {
     companion object {
         fun unauthenticated(message: String) =
@@ -28,7 +27,6 @@ class ApiException(val status: HttpStatus, val code: String, override val messag
                 "This Idempotency-Key was already used for a different transfer",
             )
 
-        /** The account rows were locked by another transfer for longer than the lock timeout. */
         fun tryAgain() =
             ApiException(
                 HttpStatus.SERVICE_UNAVAILABLE,

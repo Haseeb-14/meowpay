@@ -1,4 +1,3 @@
-/** Shared Tailwind class strings so the form, card and list look like one app. */
 export const cardClass =
   "flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950";
 export const labelClass = "font-medium text-zinc-700 dark:text-zinc-300";

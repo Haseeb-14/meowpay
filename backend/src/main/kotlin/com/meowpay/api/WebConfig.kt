@@ -11,12 +11,10 @@ class WebConfig(
     private val currentCat: CurrentCatArgumentResolver,
     private val props: MeowPayProperties,
 ) : WebMvcConfigurer {
-
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
         resolvers.add(currentCat)
     }
 
-    /** The web app goes through its own proxy; this is for calling :8080 straight from a browser. */
     override fun addCorsMappings(registry: CorsRegistry) {
         registry.addMapping("/api/**")
             .allowedOrigins(*props.corsAllowedOrigins.toTypedArray())

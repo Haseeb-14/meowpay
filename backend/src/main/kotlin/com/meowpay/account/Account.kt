@@ -11,7 +11,6 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 
-/** A cat's treat balance. The row is locked (SELECT ... FOR UPDATE) for the duration of every transfer. */
 @Entity
 @Table(name = "accounts")
 class Account(

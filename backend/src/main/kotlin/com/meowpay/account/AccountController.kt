@@ -9,10 +9,8 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api")
 class AccountController(private val accounts: AccountRepository) {
-
     data class Me(val id: Long, val name: String, val balance: Long)
 
-    /** The acting cat and its balance. */
     @GetMapping("/me")
     fun me(@CurrentCat cat: Cat): Me = Me(cat.id!!, cat.name, accounts.balanceByCatId(cat.id!!) ?: 0)
 }

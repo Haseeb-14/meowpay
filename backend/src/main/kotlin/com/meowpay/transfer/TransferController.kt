@@ -16,12 +16,6 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api")
 class TransferController(private val service: TransferService) {
-
-    /**
-     * Send treats. `Idempotency-Key` is required: retrying with the same key returns the
-     * original transfer with 200 and `Idempotency-Replayed: true` instead of moving
-     * treats twice. 201 on a new transfer.
-     */
     @PostMapping("/transfers")
     fun create(
         @CurrentCat cat: Cat,
@@ -48,7 +42,6 @@ class TransferController(private val service: TransferService) {
         }
     }
 
-    /** The acting cat's sent and received transfers, newest first. */
     @GetMapping("/transfers")
     fun list(@CurrentCat cat: Cat): List<TransferView> = service.history(cat.id!!)
 }

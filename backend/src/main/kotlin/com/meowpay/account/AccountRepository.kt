@@ -7,8 +7,6 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 interface AccountRepository : JpaRepository<Account, Long> {
-
-    /** Loads the account with a row lock held until the surrounding transaction ends. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.cat.id = :catId")
     fun lockByCatId(@Param("catId") catId: Long): Account?

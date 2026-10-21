@@ -10,7 +10,6 @@ import com.meowpay.ledger.LedgerKind
 import org.springframework.stereotype.Component
 import java.util.UUID
 
-/** Creates fresh cats per test so tests never depend on, or disturb, the seed data. */
 @Component
 class TestCats(
     private val cats: CatRepository,

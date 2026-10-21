@@ -22,7 +22,6 @@ class TransferApiTest @Autowired constructor(
     private val mvc: MockMvc,
     private val cats: TestCats,
 ) {
-
     private fun postTransfer(from: Long?, body: String, key: String? = UUID.randomUUID().toString()) =
         mvc.post("/api/transfers") {
             from?.let { header("X-Cat-Id", it) }

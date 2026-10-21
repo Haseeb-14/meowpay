@@ -7,11 +7,9 @@ import org.springframework.data.repository.query.Param
 import java.util.UUID
 
 interface TransferRepository : JpaRepository<Transfer, UUID> {
-
     @Query("select t from Transfer t where t.fromAccount.id = :accountId and t.idempotencyKey = :key")
     fun findByIdempotencyKey(@Param("accountId") accountId: Long, @Param("key") key: String): Transfer?
 
-    /** Everything the cat sent or received, newest first, with both cats loaded in one query. */
     @Query(
         """
         select t from Transfer t

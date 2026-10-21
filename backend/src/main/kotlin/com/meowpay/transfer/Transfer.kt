@@ -13,7 +13,6 @@ import org.hibernate.annotations.UuidGenerator
 import java.time.Instant
 import java.util.UUID
 
-/** A completed movement of treats from one account to another. Immutable once written. */
 @Entity
 @Table(name = "transfers")
 class Transfer(
@@ -37,7 +36,6 @@ class Transfer(
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),
 
-    /** Assigned by the database; the stable ordering key for history. */
     @Column(insertable = false, updatable = false)
     val seq: Long? = null,
 

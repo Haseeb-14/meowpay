@@ -10,20 +10,12 @@ import org.springframework.web.context.request.NativeWebRequest
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.method.support.ModelAndViewContainer
 
-/**
- * The cat making the request.
- *
- * Authentication is outside this slice: the acting cat is named by the `X-Cat-Id`
- * header and must exist. This resolver is the single seam where a real session or
- * JWT would plug in; no handler reads the sender from the request body.
- */
 @Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class CurrentCat
 
 @Component
 class CurrentCatArgumentResolver(private val cats: CatRepository) : HandlerMethodArgumentResolver {
-
     override fun supportsParameter(parameter: MethodParameter): Boolean =
         parameter.hasParameterAnnotation(CurrentCat::class.java) &&
             parameter.parameterType == Cat::class.java

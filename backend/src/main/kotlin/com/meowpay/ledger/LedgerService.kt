@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
 
-/** One line of a cat's statement. `counterparty` is the other cat for transfers, null for top-ups. */
 data class LedgerLine(
     val id: Long,
     val kind: LedgerKind,
@@ -22,7 +21,6 @@ data class LedgerLine(
 
 @Service
 class LedgerService(private val ledger: LedgerEntryRepository) {
-
     @Transactional(readOnly = true)
     fun statement(catId: Long, limit: Int = 50): List<LedgerLine> =
         ledger.statement(catId, PageRequest.of(0, limit)).map { e ->
