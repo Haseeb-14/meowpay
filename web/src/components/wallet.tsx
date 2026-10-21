@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, type Cat, type Me, type Transfer } from "@/lib/api";
+import { api, ApiError, type Cat, type LedgerLine, type Me } from "@/lib/api";
 
-const STORAGE_KEY = "meowpay.catId";
+const CAT_KEY = "meowpay.catId";
+const PENDING_KEY = "meowpay.pendingSend";
 
 type Status =
   | { kind: "idle" }
@@ -11,11 +12,38 @@ type Status =
   | { kind: "sent"; message: string }
   | { kind: "error"; message: string; retryable: boolean };
 
+/** A send whose outcome we do not know yet. Survives a reload so Retry reuses the same key. */
+type PendingSend = {
+  idempotencyKey: string;
+  meId: number;
+  toCatId: number;
+  amount: number;
+  note: string;
+};
+
+function readPending(): PendingSend | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    return raw ? (JSON.parse(raw) as PendingSend) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePending(p: PendingSend | null) {
+  try {
+    if (p) sessionStorage.setItem(PENDING_KEY, JSON.stringify(p));
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export function Wallet() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [meId, setMeId] = useState<number | null>(null);
   const [me, setMe] = useState<Me | null>(null);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [ledger, setLedger] = useState<LedgerLine[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [toCatId, setToCatId] = useState<string>("");
@@ -24,50 +52,74 @@ export function Wallet() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   // One Idempotency-Key per *intent*. It is created on submit, reused if the
-  // request fails in a way where the server may still have acted (network, 5xx),
-  // and discarded as soon as the user edits the form or the transfer succeeds.
+  // request fails in a way where the server may still have acted (network, 5xx,
+  // 503 try_again), and discarded as soon as the user edits the form or the
+  // transfer succeeds. While unresolved it is also kept in sessionStorage so a
+  // reload cannot turn a retry into a second transfer.
   const idempotencyKey = useRef<string | null>(null);
+  const meIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    meIdRef.current = meId;
+  }, [meId]);
+
   const resetKey = () => {
     idempotencyKey.current = null;
+    writePending(null);
   };
 
-  // Load the directory once; restore who we were last time.
+  // Load the directory once; restore who we were, and any send still in flight.
   useEffect(() => {
     api
       .cats()
       .then((list) => {
         setCats(list);
+        const pending = readPending();
         let saved: number | null = null;
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
+          const raw = localStorage.getItem(CAT_KEY);
           if (raw && list.some((c) => c.id === Number(raw))) saved = Number(raw);
         } catch {
           /* storage unavailable */
         }
-        setMeId(saved ?? list[0]?.id ?? null);
+        if (pending && list.some((c) => c.id === pending.meId)) {
+          idempotencyKey.current = pending.idempotencyKey;
+          setMeId(pending.meId);
+          setToCatId(String(pending.toCatId));
+          setAmount(String(pending.amount));
+          setNote(pending.note);
+          setStatus({
+            kind: "error",
+            message: "Your last send may not have completed.",
+            retryable: true,
+          });
+        } else {
+          setMeId(saved ?? list[0]?.id ?? null);
+        }
       })
       .catch((e: ApiError) => setLoadError(e.message));
   }, []);
 
   const refresh = useCallback(async (catId: number) => {
-    const [meData, history] = await Promise.all([api.me(catId), api.transfers(catId)]);
+    const [meData, lines] = await Promise.all([api.me(catId), api.ledger(catId)]);
+    // Ignore a response for a cat we have since switched away from.
+    if (meIdRef.current !== catId) return;
     setMe(meData);
-    setTransfers(history);
+    setLedger(lines);
   }, []);
 
   useEffect(() => {
     if (meId == null) return;
     try {
-      localStorage.setItem(STORAGE_KEY, String(meId));
+      localStorage.setItem(CAT_KEY, String(meId));
     } catch {
       /* storage unavailable */
     }
     let cancelled = false;
-    Promise.all([api.me(meId), api.transfers(meId)])
-      .then(([meData, history]) => {
+    Promise.all([api.me(meId), api.ledger(meId)])
+      .then(([meData, lines]) => {
         if (cancelled) return;
         setMe(meData);
-        setTransfers(history);
+        setLedger(lines);
       })
       .catch((e: ApiError) => {
         if (!cancelled) setLoadError(e.message);
@@ -80,7 +132,7 @@ export function Wallet() {
   function selectCat(id: number) {
     setMeId(id);
     setMe(null);
-    setTransfers([]);
+    setLedger([]);
     setToCatId("");
     setStatus({ kind: "idle" });
     resetKey();
@@ -89,13 +141,19 @@ export function Wallet() {
   const recipients = cats.filter((c) => c.id !== meId);
   const amountNumber = Number(amount);
   const amountValid = Number.isInteger(amountNumber) && amountNumber >= 1;
-  const canSend =
-    meId != null && toCatId !== "" && amountValid && status.kind !== "sending";
+  const canSend = meId != null && toCatId !== "" && amountValid && status.kind !== "sending";
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend || meId == null) return;
     idempotencyKey.current ??= crypto.randomUUID();
+    writePending({
+      idempotencyKey: idempotencyKey.current,
+      meId,
+      toCatId: Number(toCatId),
+      amount: amountNumber,
+      note,
+    });
     setStatus({ kind: "sending" });
     try {
       const transfer = await api.send(
@@ -240,32 +298,43 @@ export function Wallet() {
 
       <section className={cardClass}>
         <h2 className="text-lg font-semibold">Activity</h2>
-        {transfers.length === 0 ? (
+        {ledger.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">No treats have moved yet.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {transfers.map((t) => {
-              const sent = t.from.id === meId;
+            {ledger.map((line) => {
+              const incoming = line.amount > 0;
+              const label =
+                line.kind === "TOPUP"
+                  ? "Top-up"
+                  : line.kind === "TRANSFER_OUT"
+                    ? `To ${line.counterparty?.name ?? "a cat"}`
+                    : `From ${line.counterparty?.name ?? "a cat"}`;
               return (
-                <li key={t.id} className="flex items-start justify-between gap-4 py-3 text-sm">
+                <li key={line.id} className="flex items-start justify-between gap-4 py-3 text-sm">
                   <div>
-                    <p className="font-medium">
-                      {sent ? `To ${t.to.name}` : `From ${t.from.name}`}
-                    </p>
-                    {t.note && <p className="text-zinc-500 dark:text-zinc-400">{t.note}</p>}
+                    <p className="font-medium">{label}</p>
+                    {line.note && <p className="text-zinc-500 dark:text-zinc-400">{line.note}</p>}
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                      {new Date(t.createdAt).toLocaleString()}
+                      {new Date(line.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <p
-                    className={
-                      "shrink-0 font-semibold tabular-nums " +
-                      (sent ? "text-zinc-700 dark:text-zinc-300" : "text-emerald-600 dark:text-emerald-400")
-                    }
-                  >
-                    {sent ? "−" : "+"}
-                    {t.amount.toLocaleString()}
-                  </p>
+                  <div className="shrink-0 text-right">
+                    <p
+                      className={
+                        "font-semibold tabular-nums " +
+                        (incoming
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-zinc-700 dark:text-zinc-300")
+                      }
+                    >
+                      {incoming ? "+" : "−"}
+                      {Math.abs(line.amount).toLocaleString()}
+                    </p>
+                    <p className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
+                      {line.balanceAfter.toLocaleString()} after
+                    </p>
+                  </div>
                 </li>
               );
             })}

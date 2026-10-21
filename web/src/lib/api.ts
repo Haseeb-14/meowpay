@@ -9,6 +9,18 @@ export type Transfer = {
   createdAt: string;
 };
 
+export type LedgerKind = "TOPUP" | "TRANSFER_OUT" | "TRANSFER_IN";
+export type LedgerLine = {
+  id: number;
+  kind: LedgerKind;
+  amount: number;
+  balanceAfter: number;
+  counterparty: Cat | null;
+  note: string | null;
+  transferId: string | null;
+  createdAt: string;
+};
+
 /** Mirrors the backend's problem+json: a stable `code` plus a human `message`. */
 export class ApiError extends Error {
   constructor(
@@ -57,6 +69,7 @@ export const api = {
   cats: () => request<Cat[]>("/cats"),
   me: (catId: number) => request<Me>("/me", {}, catId),
   transfers: (catId: number) => request<Transfer[]>("/transfers", {}, catId),
+  ledger: (catId: number) => request<LedgerLine[]>("/ledger", {}, catId),
   send: (
     catId: number,
     body: { toCatId: number; amount: number; note?: string },
