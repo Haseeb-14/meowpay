@@ -68,7 +68,6 @@ async function request<T>(path: string, init: RequestInit = {}, catId?: number):
 export const api = {
   cats: () => request<Cat[]>("/cats"),
   me: (catId: number) => request<Me>("/me", {}, catId),
-  transfers: (catId: number) => request<Transfer[]>("/transfers", {}, catId),
   ledger: (catId: number) => request<LedgerLine[]>("/ledger", {}, catId),
   send: (
     catId: number,
