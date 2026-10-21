@@ -235,6 +235,11 @@ calling `:8080` straight from a browser console works too.
 I used Claude Code (Anthropic's CLI agent, model Fable 5.1) as a pair programmer for
 the whole exercise. Concretely:
 
+- I chose the stack and set up the architecture and project structure myself before the
+  agent wrote any code: the Kotlin/Spring Boot backend with Flyway and Data JPA, the
+  Next.js app, the Postgres compose file, and the package-by-feature layout (`cat`,
+  `account`, `transfer`, `ledger`, `api`). That scaffold is the first commit. The agent
+  worked inside that structure and followed it; it did not get to reshape it.
 - I set the scope and the design: ledger plus cached balance, pessimistic locks in a fixed
   order, mandatory idempotency key with mismatch detection, whole-request failure, header
   identity with a single seam, problem+json errors. The agent drafted the code from that
