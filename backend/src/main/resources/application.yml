@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: meowpay-backend
+  datasource:
+    url: jdbc:postgresql://localhost:5432/meowpay
+    username: meowpay
+    password: meowpay
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
