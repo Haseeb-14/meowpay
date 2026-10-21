@@ -27,6 +27,27 @@ types an amount, hits Send, and the treats move. Real backend, real Postgres, re
 | Web      | Next.js 16 (App Router), React 19, TypeScript, Tailwind 4     |
 | Tests    | JUnit 5, Spring Boot Test, MockMvc, Testcontainers 2          |
 
+## Layout
+
+```
+backend/src/main/kotlin/com/meowpay/
+  cat/        Cat entity, directory endpoint, CatRef
+  account/    Account entity (the locked row), /me
+  transfer/   Transfer entity, TransferService (the money-moving transaction), /transfers, DTOs
+  ledger/     LedgerEntry, statement query, /ledger
+  api/        error shape, X-Cat-Id resolver, CORS, /health
+  config/     MeowPayProperties (lock timeout, CORS origins)
+backend/src/main/resources/db/migration/   versioned schema (Flyway)
+backend/src/main/resources/db/seed/        repeatable demo data, excluded by the prod profile
+backend/src/test/                          Testcontainers config, TestCats helper, service + API tests
+web/src/app/          Next.js route and layout
+web/src/hooks/        useWallet: state, loading, idempotency-key lifecycle
+web/src/components/   Wallet (composition), BalanceCard, SendForm, ActivityList
+web/src/lib/          typed API client, storage helpers
+.github/workflows/    CI
+compose.yaml          Postgres
+```
+
 ## Run it from a clean clone
 
 Prerequisites: Docker, Java 17+, Node 20+, pnpm (`corepack enable` gives you pnpm).
