@@ -57,6 +57,7 @@ class ApiExceptionHandler {
                 val code = codeFor(status)
                 title = code
                 setProperty("code", code)
+                if (status.value() == 404) detail = "No such endpoint"
             }
             return ResponseEntity.status(status).body(body)
         }

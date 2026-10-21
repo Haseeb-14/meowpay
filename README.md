@@ -9,12 +9,14 @@ types an amount, hits Send, and the treats move. Real backend, real Postgres, re
 
 - `POST /api/transfers` moves treats atomically, with row locks, an idempotency key and a
   double-entry ledger behind it.
-- `GET /api/me` and `GET /api/transfers` show a cat's balance and its sent/received history.
+- `GET /api/me`, `GET /api/transfers` and `GET /api/ledger` show a cat's balance, its
+  sent/received transfers, and its statement with the balance after every line.
 - A one-page web UI: pick who you are, pick a recipient, send, watch the balance and
   activity update. Switch cats to see the other side of the transfer.
 - A test suite that boots a throwaway Postgres and proves the parts that are hard to
   check by hand: no overdraft under concurrent sends, no deadlock on opposite-direction
-  sends, replaying a request moves treats once.
+  sends, replaying a request moves treats once, and a held lock fails fast with 503.
+  CI runs it on every push.
 
 ## Stack
 
@@ -62,7 +64,8 @@ cd backend && ./gradlew test
 ```
 
 Testcontainers starts a `postgres:16` container for the test JVM and Flyway applies the
-real migrations to it. Docker must be running.
+real migrations to it. Docker must be running. The same suite runs in GitHub Actions
+(`.github/workflows/ci.yml`) together with the web lint, typecheck and build.
 
 ### Poking it with curl
 
@@ -75,8 +78,12 @@ curl -s -X POST localhost:8080/api/transfers \
   -d '{"toCatId": 2, "amount": 25, "note": "tuna fund"}'
 # 201 {"id":"...","from":{"id":1,"name":"Mochi"},"to":{"id":2,"name":"Luna"},"amount":25,...}
 
-# Same key again: 200, same transfer, nothing moves twice.
+# Same key again: 200 with Idempotency-Replayed: true, same transfer, nothing moves twice.
 # Same key, different amount: 422 idempotency_key_mismatch.
+
+curl -s localhost:8080/api/ledger -H 'X-Cat-Id: 2'
+# [{"kind":"TRANSFER_IN","amount":25,"balanceAfter":145,"counterparty":{"id":1,"name":"Mochi"},...},
+#  {"kind":"TOPUP","amount":120,"balanceAfter":120,"counterparty":null,...}]
 
 curl -s localhost:8080/api/me -H 'X-Cat-Id: 2'
 # {"id":2,"name":"Luna","balance":145}
@@ -89,7 +96,8 @@ curl -s localhost:8080/api/me -H 'X-Cat-Id: 2'
 | GET    | `/api/cats`      | no         | Directory: `[{id, name}]` |
 | GET    | `/api/me`        | yes        | `{id, name, balance}` |
 | GET    | `/api/transfers` | yes        | Sent and received, newest first, 50 max |
-| POST   | `/api/transfers` | yes        | `{toCatId, amount, note?}` + `Idempotency-Key` header. `201` new, `200` replay |
+| POST   | `/api/transfers` | yes        | `{toCatId, amount, note?}` + `Idempotency-Key` header. `201` new, `200` + `Idempotency-Replayed: true` on replay |
+| GET    | `/api/ledger`    | yes        | Statement: every movement with `balanceAfter`, newest first, 50 max |
 | GET    | `/api/health`    | no         | `{ok, cats}` |
 
 The acting cat is the `X-Cat-Id` header (see *Identity* below). Errors are RFC 9457
@@ -99,8 +107,11 @@ problem+json with a stable `code`:
 { "status": 422, "title": "insufficient_funds", "detail": "Balance is 5 treats, cannot send 6", "code": "insufficient_funds", "instance": "/api/transfers" }
 ```
 
-Codes: `unauthenticated` 401, `cat_not_found` 404, `validation_error` / `malformed_body` /
-`missing_header` 400, `self_transfer` / `insufficient_funds` / `idempotency_key_mismatch` 422.
+Codes: `unauthenticated` 401, `cat_not_found` / `not_found` 404, `validation_error` /
+`malformed_body` / `missing_header` / `invalid_parameter` 400, `self_transfer` /
+`insufficient_funds` / `idempotency_key_mismatch` 422, `try_again` 503, `internal_error` 500.
+Spring's own 404/405/415 responses and unexpected exceptions go through the same handler,
+so there is exactly one error shape and a 500 never carries a stack trace.
 
 ## Decisions and trade-offs
 
@@ -120,7 +131,10 @@ cat, which is what makes the idempotency check below race-free without a second
 mechanism. I chose this over optimistic versioning (retries under contention make the
 client logic harder) and over `SERIALIZABLE` (same retry problem, and harder to reason
 about in a code review). The cost is that one cat's transfers run one at a time, which
-is fine for a wallet.
+is fine for a wallet. Lock waits are bounded: each transfer sets a transaction-local
+`lock_timeout` (`LOCK_TIMEOUT_MS`, default 3s) and a timeout becomes `503 try_again`
+with a hint to retry with the same key, so a hot account degrades to fast failures
+instead of a pile of threads holding database connections.
 
 **Idempotency-Key is required, not optional.** Money movement over HTTP needs it: a
 client that times out cannot know whether the server acted. Same sender + same key +
@@ -128,7 +142,8 @@ same payload returns the original transfer with `200`. Same key with a different
 is a `422`, because silently returning the old transfer would hide a client bug. The key
 is scoped per sender, so two cats can use the same string without colliding. The web UI
 mints one key per intent and reuses it only when the failure was a network error or
-a 5xx; a 4xx or any edit to the form discards it.
+a 5xx; a 4xx or any edit to the form discards it. While a send is unresolved the key and
+payload also sit in `sessionStorage`, so a reload followed by Retry still cannot double-send.
 
 **All or nothing.** Insufficient funds, unknown recipient, self-transfer: the request
 fails as a whole, nothing is written, and the HTTP code says why. There is no partial
@@ -147,11 +162,19 @@ money lives in one `@Transactional` method. Entities are mapped to DTOs inside t
 transaction (`open-in-view` is off) so nothing lazy leaks into the controller.
 
 **Flyway owns the schema; Hibernate only validates it.** `ddl-auto: validate` catches a
-mapping that drifts from a migration at startup rather than in production.
+mapping that drifts from a migration at startup rather than in production. Demo cats
+live in a repeatable, idempotent seed under `db/seed`, which the `prod` profile excludes;
+versioned migrations never contain data.
+
+**History is ordered by a database sequence, not a timestamp.** `created_at` comes from
+the app server's clock. `transfers.seq` (a `bigserial`) is the ordering key, so two
+transfers in the same microsecond, or from two servers with skewed clocks, still have
+one stable order.
 
 **The web app proxies the API.** A Next.js rewrite sends `/api/*` to Spring, so the
-browser never does a cross-origin call, there is no CORS config to get wrong, and the
-backend URL is a server-side setting.
+browser never does a cross-origin call and the backend URL is a server-side setting.
+CORS is still configured for `http://localhost:3000` (`CORS_ALLOWED_ORIGINS`) so that
+calling `:8080` straight from a browser console works too.
 
 ## What I skipped on purpose
 
@@ -164,19 +187,24 @@ backend URL is a server-side setting.
   obvious extension; the ledger shape already supports it.
 - **Rate limiting, audit log, structured logging, metrics.** Needed in production, not
   needed to show the slice works.
-- **Dockerfiles for the apps and CI.** `docker compose` only runs Postgres. A reviewer
-  can run the two apps directly, and the test suite is the CI step.
+- **Dockerfiles for the apps.** `docker compose` only runs Postgres. A reviewer can run
+  the two apps directly; CI covers the build.
 - **Frontend tests.** The behaviour worth testing (money) is tested where it lives.
 
 ## What I would do next
 
 1. Real sessions: a login endpoint issuing a token, resolved by the same argument resolver.
-2. Top-ups as a first-class operation, with a human-side account so they are also
-   double-entry rather than a bare `TOPUP` row.
+2. Top-ups as a first-class operation with a treasury account on the other side, so the
+   ledger sums to zero globally rather than per transfer. A deferred constraint trigger
+   asserting that each transfer's entries net to zero would then make the ledger
+   self-protecting instead of relying on the service code.
 3. A `transfer_batches` or `status` column once there is any asynchronous step.
-4. Cursor pagination on history.
-5. Postgres `pg_stat_statements` and a slow-lock alert; the sender lock is the one
-   place contention would show up first.
+4. Cursor pagination on history and the ledger.
+5. Pool and timeout tuning: Hikari is on defaults (10 connections, 30s wait). With the
+   lock timeout in place the next bottleneck is the pool, and `pg_stat_statements`
+   plus a slow-lock alert would show it first.
+6. A Playwright flow (send, switch cat, see it arrive) for the one path the API tests
+   cannot cover.
 
 ## How I worked with AI
 
@@ -192,7 +220,11 @@ the whole exercise. Concretely:
   Maven Central for Spring Boot 4.1 and Testcontainers 2 artifact names rather than
   guessing. Both saved a round of broken builds.
 - Two things the lint and compile loop caught that I kept: the React Compiler's
-  `set-state-in-effect` rule shaped how cat switching resets state, and Testcontainers 2
-  renamed its Postgres module and package.
+  `set-state-in-effect` and `refs` rules shaped how cat switching and the idempotency
+  key are handled, and Testcontainers 2 renamed its Postgres module and package.
+- After the first working version I asked it for a critical review of its own output
+  and fixed what came back: unbounded lock waits, a missing catch-all error handler,
+  seed data in a versioned migration, and an idempotency key that did not survive a
+  reload. Those are separate commits so the history shows the before and after.
 - Every commit the agent helped write carries a `Co-Authored-By` trailer so the history
   shows where it was involved. I can walk through any line.
