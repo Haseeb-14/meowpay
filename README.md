@@ -255,5 +255,5 @@ the whole exercise. Concretely:
   and fixed what came back: unbounded lock waits, a missing catch-all error handler,
   seed data in a versioned migration, and an idempotency key that did not survive a
   reload. Those are separate commits so the history shows the before and after.
-- Every commit the agent helped write carries a `Co-Authored-By` trailer so the history
-  shows where it was involved. I can walk through any line.
+- Every commit is mine: I directed, reviewed and committed each change. I can walk
+  through any line.
