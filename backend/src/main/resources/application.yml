@@ -2,15 +2,16 @@ spring:
   application:
     name: meowpay-backend
   datasource:
-    url: jdbc:postgresql://localhost:5432/meowpay
-    username: meowpay
-    password: meowpay
+    # Override with DB_URL when Postgres is not on localhost:5432
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/meowpay}
+    username: ${DB_USER:meowpay}
+    password: ${DB_PASSWORD:meowpay}
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: validate   # Flyway owns the schema; Hibernate only checks the mapping against it
     open-in-view: false
   flyway:
     enabled: true
 
 server:
-  port: 8080
+  port: ${PORT:8080}

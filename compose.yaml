@@ -1,12 +1,13 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:16
     environment:
       POSTGRES_DB: meowpay
       POSTGRES_USER: meowpay
       POSTGRES_PASSWORD: meowpay
     ports:
-      - "5432:5432"
+      # Already running a Postgres on 5432? POSTGRES_PORT=5433 docker compose up -d
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
