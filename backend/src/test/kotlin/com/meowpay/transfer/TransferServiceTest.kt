@@ -2,12 +2,14 @@ package com.meowpay.transfer
 
 import com.meowpay.TestCats
 import com.meowpay.TestcontainersConfiguration
+import com.meowpay.account.AccountRepository
 import com.meowpay.api.ApiException
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.transaction.support.TransactionTemplate
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -20,6 +22,8 @@ import kotlin.test.assertTrue
 class TransferServiceTest @Autowired constructor(
     private val service: TransferService,
     private val ledger: LedgerEntryRepository,
+    private val accounts: AccountRepository,
+    private val tx: TransactionTemplate,
     private val cats: TestCats,
 ) {
 
@@ -136,6 +140,30 @@ class TransferServiceTest @Autowired constructor(
         assertEquals(1000, cats.balance(a))
         assertEquals(1000, cats.balance(b))
         assertEquals(rounds * 2, service.history(a.id!!, limit = 200).size)
+    }
+
+    @Test
+    fun `gives up with try_again when the sender's row stays locked past the timeout`() {
+        val a = cats.newCat(100)
+        val b = cats.newCat(0)
+        val lockHeld = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = Thread {
+            tx.execute {
+                accounts.lockByCatId(a.id!!)
+                lockHeld.countDown()
+                release.await(10, TimeUnit.SECONDS)
+            }
+        }.apply { start() }
+        lockHeld.await(10, TimeUnit.SECONDS)
+
+        val e = assertThrows<ApiException> { send(a.id!!, b.id!!, 1) }
+
+        release.countDown()
+        holder.join()
+        assertEquals("try_again", e.code)
+        assertEquals(100, cats.balance(a))
+        assertTrue(service.history(a.id!!).isEmpty())
     }
 
     /** Runs [block] on [n] threads released at the same instant; returns "ok" or the ApiException code per thread. */

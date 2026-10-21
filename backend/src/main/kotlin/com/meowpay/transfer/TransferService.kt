@@ -3,6 +3,11 @@ package com.meowpay.transfer
 import com.meowpay.account.AccountRepository
 import com.meowpay.api.ApiException
 import com.meowpay.cat.Cat
+import jakarta.persistence.EntityManager
+import jakarta.persistence.LockTimeoutException
+import jakarta.persistence.PessimisticLockException
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.dao.PessimisticLockingFailureException
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -36,6 +41,8 @@ class TransferService(
     private val accounts: AccountRepository,
     private val transfers: TransferRepository,
     private val ledger: LedgerEntryRepository,
+    private val entityManager: EntityManager,
+    @Value("\${meowpay.lock-timeout-ms:3000}") private val lockTimeoutMs: Long,
 ) {
 
     /**
@@ -46,6 +53,8 @@ class TransferService(
      *  - the sender's lock serialises every transfer from that cat, so the
      *    idempotency lookup below cannot race with itself and the balance check
      *    always sees the latest committed value.
+     * Lock waits are bounded by `meowpay.lock-timeout-ms`; a request that cannot get
+     * its rows in time fails with 503 `try_again` instead of holding a connection.
      * Any exception rolls the whole thing back; nothing is ever half-applied.
      */
     @Transactional
@@ -53,8 +62,17 @@ class TransferService(
         require(cmd.amount > 0) { "amount must be positive" }
         if (cmd.fromCatId == cmd.toCatId) throw ApiException.selfTransfer()
 
-        val locked = listOf(cmd.fromCatId, cmd.toCatId).sorted().associateWith { catId ->
-            accounts.lockByCatId(catId) ?: throw ApiException.catNotFound(catId)
+        entityManager.createNativeQuery("set local lock_timeout = $lockTimeoutMs").executeUpdate()
+        val locked = try {
+            listOf(cmd.fromCatId, cmd.toCatId).sorted().associateWith { catId ->
+                accounts.lockByCatId(catId) ?: throw ApiException.catNotFound(catId)
+            }
+        } catch (e: PessimisticLockingFailureException) {
+            throw ApiException.tryAgain()
+        } catch (e: LockTimeoutException) {
+            throw ApiException.tryAgain()
+        } catch (e: PessimisticLockException) {
+            throw ApiException.tryAgain()
         }
         val from = locked.getValue(cmd.fromCatId)
         val to = locked.getValue(cmd.toCatId)

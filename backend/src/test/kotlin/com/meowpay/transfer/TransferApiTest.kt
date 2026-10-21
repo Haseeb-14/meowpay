@@ -73,6 +73,7 @@ class TransferApiTest @Autowired constructor(
         }
         postTransfer(a.id, body, key).andExpect {
             status { isOk() }
+            header { string("Idempotency-Replayed", "true") }
             jsonPath("$.amount") { value(20) }
         }
 
@@ -94,6 +95,27 @@ class TransferApiTest @Autowired constructor(
         postTransfer(a.id, """{"toCatId":${b.id},"amount":6}""").andExpect {
             status { isUnprocessableEntity() }
             jsonPath("$.code") { value("insufficient_funds") }
+        }
+    }
+
+    @Test
+    fun `unknown paths and bad parameter types use the same error shape`() {
+        mvc.get("/api/nope").andExpect {
+            status { isNotFound() }
+            jsonPath("$.code") { value("not_found") }
+        }
+        mvc.get("/api/me") { header("X-Cat-Id", "not-a-number") }.andExpect {
+            status { isUnauthorized() }
+            jsonPath("$.code") { value("unauthenticated") }
+        }
+        mvc.post("/api/transfers") {
+            header("X-Cat-Id", 1)
+            header("Idempotency-Key", "k")
+            contentType = MediaType.APPLICATION_JSON
+            content = "{not json"
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.code") { value("malformed_body") }
         }
     }
 

@@ -27,5 +27,13 @@ class ApiException(val status: HttpStatus, val code: String, override val messag
                 "idempotency_key_mismatch",
                 "This Idempotency-Key was already used for a different transfer",
             )
+
+        /** The account rows were locked by another transfer for longer than the lock timeout. */
+        fun tryAgain() =
+            ApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "try_again",
+                "The account is busy with another transfer; retry with the same Idempotency-Key",
+            )
     }
 }

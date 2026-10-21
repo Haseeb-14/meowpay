@@ -1,0 +1,2 @@
+meowpay:
+  lock-timeout-ms: 500   # keep the lock-timeout test fast

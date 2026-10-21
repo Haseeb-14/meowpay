@@ -29,7 +29,8 @@ class TransferController(private val service: TransferService) {
 
     /**
      * Send treats. `Idempotency-Key` is required: retrying with the same key returns the
-     * original transfer with 200 instead of moving treats twice. 201 on a new transfer.
+     * original transfer with 200 and `Idempotency-Replayed: true` instead of moving
+     * treats twice. 201 on a new transfer.
      */
     @PostMapping("/transfers")
     fun create(
@@ -50,8 +51,11 @@ class TransferController(private val service: TransferService) {
                 idempotencyKey = key,
             ),
         )
-        val status = if (result.replayed) HttpStatus.OK else HttpStatus.CREATED
-        return ResponseEntity.status(status).body(result.transfer)
+        return if (result.replayed) {
+            ResponseEntity.ok().header("Idempotency-Replayed", "true").body(result.transfer)
+        } else {
+            ResponseEntity.status(HttpStatus.CREATED).body(result.transfer)
+        }
     }
 
     /** The acting cat's sent and received transfers, newest first. */
